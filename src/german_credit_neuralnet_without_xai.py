@@ -20,7 +20,6 @@ from scipy.stats import spearmanr
 
 from utils import Params
 
-
 params = Params(r"../configuration/german_credit/params_neuralnet.json")
 
 np.random.seed(params.seed)
@@ -29,7 +28,7 @@ torch.manual_seed(params.seed)
 n_epochs = params.n_epochs
 device = torch.device("cpu")
 
-input_df_raw = pd.read_csv(r"..\data\raw\credit_data_processed.csv")
+input_df_raw = pd.read_csv(r"..\data\raw\german_credit.csv")
 
 all_features = True
 
@@ -41,7 +40,7 @@ if all_features == False:
 else:
     input_df_raw.rename(
         columns={"CriticalAccountOrLoansElsewhere": "NoHistoryOfDelayedPayments"},
-        inplace=True
+        inplace=True,
     )
 
 df_train, df_test = train_test_split(input_df_raw, test_size=0.33, random_state=42)
@@ -158,11 +157,7 @@ test_ds = CreditDataset(xtest, ytest)
 
 bat_size = params.batch_size
 
-train_ldr = torch.utils.data.DataLoader(
-    train_ds,
-    batch_size=bat_size,
-    shuffle=True
-)
+train_ldr = torch.utils.data.DataLoader(train_ds, batch_size=bat_size, shuffle=True)
 
 print("\nCreating binary NN classifier\n")
 
@@ -220,8 +215,7 @@ with torch.no_grad():
 target = test_ds.y_data
 
 precision_nn_test, recall_nn_test, thresholds_nn_test = precision_recall_curve(
-    target.detach().numpy(),
-    p_test.detach().numpy()
+    target.detach().numpy(), p_test.detach().numpy()
 )
 
 auc_precision_recall_test = round(auc(recall_nn_test, precision_nn_test), 3)
@@ -230,9 +224,7 @@ print("---------------Assessment of model performance on the test set-----------
 print("AUC-PR (test set):", str(auc_precision_recall_test))
 
 display = PrecisionRecallDisplay.from_predictions(
-    target.detach().numpy(),
-    p_test.detach().numpy(),
-    name=""
+    target.detach().numpy(), p_test.detach().numpy(), name=""
 )
 
 _ = display.ax_.set_title("Precision-Recall curve: " + params.model_type)
@@ -240,8 +232,8 @@ _ = display.ax_.set_title("Precision-Recall curve: " + params.model_type)
 plt.savefig("../plots//german_credit//pr_curve//pr_curve_neuralnet.png")
 plt.show()
 
-f1_scores_test = 2 * recall_nn_test * precision_nn_test / (
-    recall_nn_test + precision_nn_test
+f1_scores_test = (
+    2 * recall_nn_test * precision_nn_test / (recall_nn_test + precision_nn_test)
 )
 
 f1_scores_nn_test = round(np.max(f1_scores_test), 3)
@@ -252,16 +244,12 @@ print(confusion_matrix(ytest.detach().numpy(), predicted_clf_nn_best_threshold))
 sum(confusion_matrix(ytest.detach().numpy(), predicted_clf_nn_best_threshold))
 
 f1_score_nn_test = round(
-    f1_score(ytest.detach().numpy(), predicted_clf_nn_best_threshold),
-    3
+    f1_score(ytest.detach().numpy(), predicted_clf_nn_best_threshold), 3
 )
 
 print(
     "accuracy:",
-    round(
-        accuracy_score(ytest.detach().numpy(), predicted_clf_nn_best_threshold),
-        3
-    )
+    round(accuracy_score(ytest.detach().numpy(), predicted_clf_nn_best_threshold), 3),
 )
 
 print("best f1-score in the test set: ", f1_score_nn_test)
@@ -285,8 +273,7 @@ with torch.no_grad():
 target = train_ds.y_data
 
 precision_nn_train, recall_nn_train, thresholds_nn_train = precision_recall_curve(
-    target.detach().numpy(),
-    p_train.detach().numpy()
+    target.detach().numpy(), p_train.detach().numpy()
 )
 
 auc_precision_recall_nn_train = auc(recall_nn_train, precision_nn_train)
@@ -294,29 +281,31 @@ auc_precision_recall_nn_train = auc(recall_nn_train, precision_nn_train)
 print("---------------Assessment of model performance on the train set---------------")
 print("AUC-PR (train set):", str(auc_precision_recall_nn_train))
 
-f1_scores_nn_train = 2 * recall_nn_train * precision_nn_train / (
-    recall_nn_train + precision_nn_train
+f1_scores_nn_train = (
+    2 * recall_nn_train * precision_nn_train / (recall_nn_train + precision_nn_train)
 )
 
 f1_score_train = round(np.max(f1_scores_nn_train), 3)
 
 print("Best f1-Score in the training set:", f1_score_train)
 
-df_performance = pd.DataFrame({
-    "model": [params.model_type],
-    "all_features": [all_features],
-    "f1_score_train": [f1_score_train],
-    "f1_score_test": [f1_score_nn_test],
-    "auc_pr_test": [auc_precision_recall_test],
-    "time_stamp": [datetime.now().strftime("%d-%m-%Y-%H-%M")]
-})
+df_performance = pd.DataFrame(
+    {
+        "model": [params.model_type],
+        "all_features": [all_features],
+        "f1_score_train": [f1_score_train],
+        "f1_score_test": [f1_score_nn_test],
+        "auc_pr_test": [auc_precision_recall_test],
+        "time_stamp": [datetime.now().strftime("%d-%m-%Y-%H-%M")],
+    }
+)
 
 if all_features == True:
     df_performance.to_csv(
         "../data//output//use_case_performance_all.csv",
         mode="a",
         header=False,
-        index=False
+        index=False,
     )
     plt.savefig("../plots//german_credit//pr_curve//pr_curve_neuralnet_features.png")
 else:
@@ -324,7 +313,7 @@ else:
         "../data//output//use_case_performance_filtered.csv",
         mode="a",
         header=False,
-        index=False
+        index=False,
     )
     plt.savefig("../plots/german_credit/pr_curve/pr_curve_neuralnet_filtered.png")
 

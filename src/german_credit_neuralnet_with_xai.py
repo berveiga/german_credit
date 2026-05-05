@@ -30,7 +30,7 @@ torch.manual_seed(params.seed)
 n_epochs = params.n_epochs
 device = torch.device("cpu")
 
-input_df_raw = pd.read_csv(r"..\data\raw\credit_data_processed.csv")
+input_df_raw = pd.read_csv(r"..\data\raw\german_credit.csv")
 
 all_features = True
 

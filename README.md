@@ -17,7 +17,7 @@ An additional XAI script is included for explainability experiments with SHAP/Sh
 │       └── params_neuralnet.json
 ├── data/
 │   └── raw/
-│       └── credit_data_processed.csv
+│       └── german_credit.csv
 ├── src/
 │   ├── german_credit_neuralnet_without_xai.py
 │   └── german_credit_neuralnet_with_xai.py
@@ -55,7 +55,7 @@ cd src
 python german_credit_neuralnet_without_xai.py
 ```
 
-The script reads the processed dataset from `data/raw/credit_data_processed.csv`, trains the model, prints evaluation results, and writes generated outputs such as plots and performance CSV files.
+The script reads the processed dataset from `data/raw/german_credit.csv`, trains the model, prints evaluation results, and writes generated outputs such as plots and performance CSV files.
 
 ## Notes
 
