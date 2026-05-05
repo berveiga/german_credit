@@ -1,0 +1,21 @@
+{
+    "dataset": "german-credit",
+    "model_type": "Neural network",
+    "model_version": "",
+    "n_nodes": 50,
+    "seed": 42,
+    "batch_size": 10,
+    "learning_rate": 0.0001,
+    "n_epochs": 500,
+    "n_input_nodes": 27,
+    "n_nodes_layer1": 27,
+    "n_nodes_layer2": 39,
+    "n_nodes_layer3": 15,
+    "protected_class": 1,
+    "unprotected_class": 0,
+    "positive_outcome": 1,
+    "negative_outcome": 0,
+    "perturbation_std": 0.3,
+    "samples": 3000,
+    "threshold": 0.5
+}
