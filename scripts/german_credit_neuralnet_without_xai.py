@@ -37,6 +37,7 @@ torch.manual_seed(params.seed)
 n_epochs = params.n_epochs
 # Use GPU if available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Using device:", device)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(params.seed)
 
