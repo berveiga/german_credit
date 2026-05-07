@@ -2,7 +2,10 @@
 This code fits a neural network on the German credit dataset.
 """
 
+# Import libraries
 from datetime import datetime
+from pathlib import Path
+import sys
 import time
 import numpy as np
 import pandas as pd
@@ -18,17 +21,31 @@ from sklearn.metrics import PrecisionRecallDisplay
 
 from scipy.stats import spearmanr
 
+# Look for the package in the parent directory and add it to the path if not found
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = PROJECT_ROOT / "german_credit"
+if str(PACKAGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_ROOT))
+
 from utils import Params
 
-params = Params(r"../configuration/german_credit/params_neuralnet.json")
+params = Params(PROJECT_ROOT / "configs/german_credit/params_neuralnet.json")
 
 np.random.seed(params.seed)
 torch.manual_seed(params.seed)
 
 n_epochs = params.n_epochs
-device = torch.device("cpu")
+# Use GPU if available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(params.seed)
 
-input_df_raw = pd.read_csv(r"..\data\raw\german_credit.csv")
+PR_CURVE_DIR = PROJECT_ROOT / "plots/german_credit/pr_curve"
+OUTPUT_DIR = PROJECT_ROOT / "data/output"
+PR_CURVE_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+input_df_raw = pd.read_csv(PROJECT_ROOT / "data/raw/german_credit.csv")
 
 all_features = True
 
@@ -50,6 +67,12 @@ xtrain = df_train.drop(["GoodCustomer"], axis=1)
 ytest = df_test["GoodCustomer"]
 xtest = df_test.drop(["GoodCustomer"], axis=1)
 
+xtrain = pd.get_dummies(xtrain, dtype="float32")
+xtest = pd.get_dummies(xtest, dtype="float32")
+xtest = xtest.reindex(columns=xtrain.columns, fill_value=0)
+feature_names = xtrain.columns
+params.n_nodes_layer1 = xtrain.shape[1]
+
 scaler = StandardScaler()
 xtrain = scaler.fit_transform(xtrain)
 xtest = scaler.transform(xtest)
@@ -66,8 +89,6 @@ xtrain = torch.tensor(xtrain, requires_grad=True)
 ytrain = torch.tensor(ytrain.to_numpy(), requires_grad=True).reshape([-1, 1])
 xtest = torch.tensor(xtest, requires_grad=True)
 ytest = torch.tensor(ytest.to_numpy(), requires_grad=True).reshape([-1, 1])
-
-feature_names = df_train.drop(["GoodCustomer"], axis=1).columns
 
 
 class CreditDataset(torch.utils.data.Dataset):
@@ -213,9 +234,12 @@ with torch.no_grad():
     p_test = net(test_ds.x_data)
 
 target = test_ds.y_data
+target_test_np = target.detach().cpu().numpy().ravel()
+p_test_np = p_test.detach().cpu().numpy().ravel()
+ytest_np = ytest.detach().cpu().numpy().ravel()
 
 precision_nn_test, recall_nn_test, thresholds_nn_test = precision_recall_curve(
-    target.detach().numpy(), p_test.detach().numpy()
+    target_test_np, p_test_np
 )
 
 auc_precision_recall_test = round(auc(recall_nn_test, precision_nn_test), 3)
@@ -223,13 +247,11 @@ auc_precision_recall_test = round(auc(recall_nn_test, precision_nn_test), 3)
 print("---------------Assessment of model performance on the test set---------------")
 print("AUC-PR (test set):", str(auc_precision_recall_test))
 
-display = PrecisionRecallDisplay.from_predictions(
-    target.detach().numpy(), p_test.detach().numpy(), name=""
-)
+display = PrecisionRecallDisplay.from_predictions(target_test_np, p_test_np, name="")
 
 _ = display.ax_.set_title("Precision-Recall curve: " + params.model_type)
 
-plt.savefig("../plots//german_credit//pr_curve//pr_curve_neuralnet.png")
+plt.savefig(PR_CURVE_DIR / "pr_curve_neuralnet.png")
 plt.show()
 
 f1_scores_test = (
@@ -238,24 +260,22 @@ f1_scores_test = (
 
 f1_scores_nn_test = round(np.max(f1_scores_test), 3)
 
-predicted_clf_nn_best_threshold = (p_test >= 0.5).detach().numpy().astype("int")
+predicted_clf_nn_best_threshold = (p_test_np >= 0.5).astype("int")
 
-print(confusion_matrix(ytest.detach().numpy(), predicted_clf_nn_best_threshold))
-sum(confusion_matrix(ytest.detach().numpy(), predicted_clf_nn_best_threshold))
+print(confusion_matrix(ytest_np, predicted_clf_nn_best_threshold))
+sum(confusion_matrix(ytest_np, predicted_clf_nn_best_threshold))
 
-f1_score_nn_test = round(
-    f1_score(ytest.detach().numpy(), predicted_clf_nn_best_threshold), 3
-)
+f1_score_nn_test = round(f1_score(ytest_np, predicted_clf_nn_best_threshold), 3)
 
 print(
     "accuracy:",
-    round(accuracy_score(ytest.detach().numpy(), predicted_clf_nn_best_threshold), 3),
+    round(accuracy_score(ytest_np, predicted_clf_nn_best_threshold), 3),
 )
 
 print("best f1-score in the test set: ", f1_score_nn_test)
 
-fpr, tpr, _ = roc_curve(ytest.detach().numpy(), p_test.detach().numpy())
-auc_roc = roc_auc_score(ytest.detach().numpy(), p_test.detach().numpy())
+fpr, tpr, _ = roc_curve(ytest_np, p_test_np)
+auc_roc = roc_auc_score(ytest_np, p_test_np)
 
 plt.plot(fpr, tpr, label="data 1, auc=" + str(round(auc_roc, 2)))
 plt.title("ROC curve: " + params.model_type)
@@ -271,9 +291,11 @@ with torch.no_grad():
     p_train = net(train_ds.x_data)
 
 target = train_ds.y_data
+target_train_np = target.detach().cpu().numpy().ravel()
+p_train_np = p_train.detach().cpu().numpy().ravel()
 
 precision_nn_train, recall_nn_train, thresholds_nn_train = precision_recall_curve(
-    target.detach().numpy(), p_train.detach().numpy()
+    target_train_np, p_train_np
 )
 
 auc_precision_recall_nn_train = auc(recall_nn_train, precision_nn_train)
@@ -302,20 +324,20 @@ df_performance = pd.DataFrame(
 
 if all_features == True:
     df_performance.to_csv(
-        "../data//output//use_case_performance_all.csv",
+        OUTPUT_DIR / "use_case_performance_all.csv",
         mode="a",
         header=False,
         index=False,
     )
-    plt.savefig("../plots//german_credit//pr_curve//pr_curve_neuralnet_features.png")
+    plt.savefig(PR_CURVE_DIR / "pr_curve_neuralnet_features.png")
 else:
     df_performance.to_csv(
-        "../data//output//use_case_performance_filtered.csv",
+        OUTPUT_DIR / "use_case_performance_filtered.csv",
         mode="a",
         header=False,
         index=False,
     )
-    plt.savefig("../plots/german_credit/pr_curve/pr_curve_neuralnet_filtered.png")
+    plt.savefig(PR_CURVE_DIR / "pr_curve_neuralnet_filtered.png")
 
 
 """
