@@ -1,8 +1,8 @@
 """
-Plot test-set classification error against the number of training epochs.
+Plot train-set and test-set AUC-PR against the number of training epochs.
 
 The model and preprocessing mirror german_credit_neuralnet_without_xai.py.
-Training runs once up to 3000 epochs and records test error every 100 epochs.
+Training runs once up to params.n_epochs and records AUC-PR every 100 epochs.
 """
 
 from pathlib import Path
@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+from sklearn.metrics import auc, precision_recall_curve
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
@@ -25,7 +26,7 @@ from utils import Params
 
 PARAMS_PATH = PROJECT_ROOT / "configs/german_credit/params_neuralnet.json"
 DATA_PATH = PROJECT_ROOT / "data/raw/german_credit.csv"
-PLOT_DIR = PROJECT_ROOT / "plots/german_credit/test_error"
+PLOT_DIR = PROJECT_ROOT / "plots/german_credit/auc_pr"
 OUTPUT_DIR = PROJECT_ROOT / "data/output"
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
@@ -36,9 +37,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 MIN_EPOCHS = 100
-MAX_EPOCHS = 1000
 EPOCH_STEP = 100
-THRESHOLD = 0.5
 
 
 params = Params(PARAMS_PATH)
@@ -113,14 +112,17 @@ class Net(nn.Module):
         return torch.sigmoid(self.out(z))
 
 
-def test_error(model, x_test, y_test):
+def auc_pr(model, x_data, y_data):
+    was_training = model.training
     model.eval()
     with torch.no_grad():
-        predictions = (model(x_test.to(device)) >= THRESHOLD).float()
-        targets = y_test.to(device)
-        error = (predictions != targets).float().mean().item()
-    model.train()
-    return error
+        probabilities = model(x_data.to(device)).detach().cpu().numpy().ravel()
+
+    targets = y_data.detach().cpu().numpy().ravel()
+    precision, recall, _ = precision_recall_curve(targets, probabilities)
+    if was_training:
+        model.train()
+    return auc(recall, precision)
 
 
 def main():
@@ -138,12 +140,13 @@ def main():
     optimizer = torch.optim.SGD(model.parameters(), lr=params.learning_rate)
 
     epoch_values = []
-    test_errors = []
+    train_auc_pr_values = []
+    test_auc_pr_values = []
 
     print("Using device:", device)
-    print(f"Training for {MAX_EPOCHS} epochs; recording every {EPOCH_STEP} epochs.")
+    print(f"Training for {params.n_epochs} epochs; recording every {EPOCH_STEP} epochs.")
 
-    for epoch in range(1, MAX_EPOCHS + 1):
+    for epoch in range(1, params.n_epochs + 1):
         epoch_loss = 0.0
 
         for x_batch, y_batch in train_ldr:
@@ -156,26 +159,52 @@ def main():
             optimizer.step()
 
         if epoch >= MIN_EPOCHS and epoch % EPOCH_STEP == 0:
-            error = test_error(model, x_test, y_test)
+            train_auc_pr = auc_pr(model, x_train, y_train)
+            test_auc_pr = auc_pr(model, x_test, y_test)
+
             epoch_values.append(epoch)
-            test_errors.append(error)
+            train_auc_pr_values.append(train_auc_pr)
+            test_auc_pr_values.append(test_auc_pr)
+
             print(
-                f"epoch = {epoch:4d} train_loss = {epoch_loss:8.4f} "
-                f"test_error = {error:.4f}"
+                f"epoch = {epoch:5d} train_loss = {epoch_loss:8.4f} "
+                f"train_auc_pr = {train_auc_pr:.4f} test_auc_pr = {test_auc_pr:.4f}"
             )
 
-    results = pd.DataFrame({"epochs": epoch_values, "test_error": test_errors})
-    results_path = OUTPUT_DIR / "test_error_vs_epochs.csv"
-    plot_path = PLOT_DIR / "test_error_vs_epochs.png"
+    results = pd.DataFrame(
+        {
+            "epochs": epoch_values,
+            "train_auc_pr": train_auc_pr_values,
+            "test_auc_pr": test_auc_pr_values,
+        }
+    )
+    results_path = OUTPUT_DIR / "auc_pr_vs_epochs.csv"
+    plot_path = PLOT_DIR / "auc_pr_vs_epochs.png"
 
     results.to_csv(results_path, index=False)
 
     plt.figure(figsize=(8, 5))
-    plt.plot(epoch_values, test_errors, marker="o", markersize=3, linewidth=2)
+    plt.plot(
+        epoch_values,
+        train_auc_pr_values,
+        marker="o",
+        markersize=3,
+        linewidth=2,
+        label="Training AUC-PR",
+    )
+    plt.plot(
+        epoch_values,
+        test_auc_pr_values,
+        marker="o",
+        markersize=3,
+        linewidth=2,
+        label="Test AUC-PR",
+    )
     plt.xlabel("Number of epochs")
-    plt.ylabel("Test-set error")
-    plt.title("Test-set error vs. number of epochs")
+    plt.ylabel("AUC-PR")
+    plt.title("Training and test AUC-PR vs. number of epochs")
     plt.grid(alpha=0.3)
+    plt.legend()
     plt.tight_layout()
     plt.savefig(plot_path, dpi=300)
 

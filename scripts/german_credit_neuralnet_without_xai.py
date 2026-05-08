@@ -2,12 +2,10 @@
 This code fits a neural network on the German credit dataset.
 """
 
-# Import libraries
 from datetime import datetime
 from pathlib import Path
 import sys
 import time
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch
@@ -21,7 +19,6 @@ from sklearn.metrics import PrecisionRecallDisplay
 
 from scipy.stats import spearmanr
 
-# Look for the package in the parent directory and add it to the path if not found
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = PROJECT_ROOT / "german_credit"
 if str(PACKAGE_ROOT) not in sys.path:
@@ -35,11 +32,7 @@ np.random.seed(params.seed)
 torch.manual_seed(params.seed)
 
 n_epochs = params.n_epochs
-# Use GPU if available
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Using device:", device)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(params.seed)
+device = torch.device("cpu")
 
 PR_CURVE_DIR = PROJECT_ROOT / "plots/german_credit/pr_curve"
 OUTPUT_DIR = PROJECT_ROOT / "data/output"
@@ -235,9 +228,9 @@ with torch.no_grad():
     p_test = net(test_ds.x_data)
 
 target = test_ds.y_data
-target_test_np = target.detach().cpu().numpy().ravel()
-p_test_np = p_test.detach().cpu().numpy().ravel()
-ytest_np = ytest.detach().cpu().numpy().ravel()
+target_test_np = target.detach().numpy().ravel()
+p_test_np = p_test.detach().numpy().ravel()
+ytest_np = ytest.detach().numpy().ravel()
 
 precision_nn_test, recall_nn_test, thresholds_nn_test = precision_recall_curve(
     target_test_np, p_test_np
@@ -292,8 +285,8 @@ with torch.no_grad():
     p_train = net(train_ds.x_data)
 
 target = train_ds.y_data
-target_train_np = target.detach().cpu().numpy().ravel()
-p_train_np = p_train.detach().cpu().numpy().ravel()
+target_train_np = target.detach().numpy().ravel()
+p_train_np = p_train.detach().numpy().ravel()
 
 precision_nn_train, recall_nn_train, thresholds_nn_train = precision_recall_curve(
     target_train_np, p_train_np
